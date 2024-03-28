@@ -37,7 +37,9 @@ def main():
         batch_size=args.batch_size,
         image_size=args.image_size,
         class_cond=args.class_cond,
-        is_train=args.is_train
+        num_classes=args.num_classes,
+        is_train=args.is_train,
+        use_hv_map=args.use_hv_map,
     )
 
     logger.log("training...")
@@ -59,6 +61,7 @@ def main():
         schedule_sampler=schedule_sampler,
         weight_decay=args.weight_decay,
         lr_anneal_steps=args.lr_anneal_steps,
+        class_cond=args.class_cond
     ).run_loop()
 
 
