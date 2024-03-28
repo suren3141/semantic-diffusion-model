@@ -8,6 +8,7 @@ from mpi4py import MPI
 import numpy as np
 from torch.utils.data import DataLoader, Dataset
 
+import importlib
 
 def load_data(
     *,
@@ -15,7 +16,9 @@ def load_data(
     data_dir,
     batch_size,
     image_size,
-    class_cond=False,
+    class_cond=False,       # sri
+    num_classes:int = None,
+    use_hv_map = True,
     deterministic=False,
     random_crop=True,
     random_flip=True,
@@ -42,7 +45,19 @@ def load_data(
     if not data_dir:
         raise ValueError("unspecified data directory")
 
-    if dataset_mode == 'cityscapes':
+    nuclei_datasets = ["dsb2018", "monuseg"]
+
+    is_rgb = True
+    if dataset_mode == 'dsb2018':
+        all_files = _list_image_files_recursively(os.path.join(data_dir, 'train' if is_train else 'test', 'images'))
+        classes = _list_image_files_recursively(os.path.join(data_dir, 'train' if is_train else 'test', 'masks'))
+        instances = None
+        is_rgb = False
+    elif dataset_mode == 'monuseg':
+        all_files = _list_image_files_recursively(os.path.join(data_dir, 'MoNuSegTrainingData' if is_train else 'MoNuSegTestData', 'images'))
+        classes = _list_image_files_recursively(os.path.join(data_dir, 'MoNuSegTrainingData' if is_train else 'MoNuSegTestData', 'bin_masks'))
+        instances = None
+    elif dataset_mode == 'cityscapes':
         all_files = _list_image_files_recursively(os.path.join(data_dir, 'leftImg8bit', 'train' if is_train else 'val'))
         labels_file = _list_image_files_recursively(os.path.join(data_dir, 'gtFine', 'train' if is_train else 'val'))
         classes = [x for x in labels_file if x.endswith('_labelIds.png')]
@@ -50,6 +65,10 @@ def load_data(
     elif dataset_mode == 'ade20k':
         all_files = _list_image_files_recursively(os.path.join(data_dir, 'images', 'training' if is_train else 'validation'))
         classes = _list_image_files_recursively(os.path.join(data_dir, 'annotations', 'training' if is_train else 'validation'))
+        instances = None
+    elif dataset_mode == 'coco':
+        all_files = _list_image_files_recursively(os.path.join(data_dir, 'images', 'train2017' if is_train else 'val2017'))
+        classes = _list_image_files_recursively(os.path.join(data_dir, 'annotations', 'train2017' if is_train else 'val2017'))
         instances = None
     elif dataset_mode == 'celeba':
         # The edge is computed by the instances.
@@ -63,18 +82,38 @@ def load_data(
 
     print("Len of Dataset:", len(all_files))
 
-    dataset = ImageDataset(
-        dataset_mode,
-        image_size,
-        all_files,
-        classes=classes,
-        instances=instances,
-        shard=MPI.COMM_WORLD.Get_rank(),
-        num_shards=MPI.COMM_WORLD.Get_size(),
-        random_crop=random_crop,
-        random_flip=random_flip,
-        is_train=is_train
-    )
+    if dataset_mode in nuclei_datasets:
+
+        dataset = NucleiDataset(
+            dataset_mode,
+            image_size,
+            all_files,
+            classes=classes,
+            class_cond=class_cond,
+            num_classes=num_classes,
+            instances=instances,
+            shard=MPI.COMM_WORLD.Get_rank(),
+            num_shards=MPI.COMM_WORLD.Get_size(),
+            random_crop=random_crop,
+            random_flip=random_flip,
+            is_train=is_train,
+            is_rgb=is_rgb,
+            use_hv_map=use_hv_map,
+        )
+
+    else:
+        dataset = ImageDataset(
+            dataset_mode,
+            image_size,
+            all_files,
+            classes=classes,
+            instances=instances,
+            shard=MPI.COMM_WORLD.Get_rank(),
+            num_shards=MPI.COMM_WORLD.Get_size(),
+            random_crop=random_crop,
+            random_flip=random_flip,
+            is_train=is_train
+        )
 
     if deterministic:
         loader = DataLoader(
@@ -94,6 +133,8 @@ def _list_image_files_recursively(data_dir):
         full_path = bf.join(data_dir, entry)
         ext = entry.split(".")[-1]
         if "." in entry and ext.lower() in ["jpg", "jpeg", "png", "gif"]:
+            results.append(full_path)
+        elif "." in entry and ext.lower() in ["tif"]:
             results.append(full_path)
         elif bf.isdir(full_path):
             results.extend(_list_image_files_recursively(full_path))
@@ -168,6 +209,9 @@ class ImageDataset(Dataset):
 
         arr_image = arr_image.astype(np.float32) / 127.5 - 1
 
+        if self.dataset_mode == "dsb2018":
+            arr_class[arr_class>0] = 255
+
         out_dict['path'] = path
         out_dict['label_ori'] = arr_class.copy()
 
@@ -176,6 +220,10 @@ class ImageDataset(Dataset):
             arr_class[arr_class == 255] = 150
         elif self.dataset_mode == 'coco':
             arr_class[arr_class == 255] = 182
+        elif self.dataset_mode == 'dsb2018':
+            arr_class[arr_class == 255] = 1
+        elif self.dataset_mode == 'monuseg':
+            arr_class[arr_class == 255] = 1
 
         out_dict['label'] = arr_class[None, ]
 
@@ -183,6 +231,169 @@ class ImageDataset(Dataset):
             out_dict['instance'] = arr_instance[None, ]
 
         return np.transpose(arr_image, [2, 0, 1]), out_dict
+
+
+class NucleiDataset(Dataset):
+    def __init__(
+        self,
+        dataset_mode,
+        resolution,
+        image_paths,
+        classes=None,
+        class_cond=True,
+        num_classes:int = None,        
+        instances=None,
+        shard=0,
+        num_shards=1,
+        random_crop=False,
+        random_flip=True,
+        is_train=True,
+        is_rgb = True,
+        use_hv_map = False,
+    ):
+        super().__init__()
+        self.is_train = is_train
+        self.dataset_mode = dataset_mode
+        self.resolution = resolution
+        self.local_images = image_paths[shard:][::num_shards]
+        self.local_classes = None if classes is None else classes[shard:][::num_shards]
+        self.local_instances = None if instances is None else instances[shard:][::num_shards]
+        self.random_crop = random_crop
+        self.random_flip = random_flip
+        self.augment = False
+
+        targets = importlib.import_module('hover_net.models.hovernet.targets')
+        self.gen_targets = getattr(targets, 'gen_targets')
+
+        self.class_cond = class_cond
+        self.num_classes = num_classes
+        self.use_hv_map = use_hv_map
+        self.is_rgb = is_rgb
+
+    def __len__(self):
+        return len(self.local_images)
+
+    def __getitem__(self, idx):
+
+        path = self.local_images[idx]
+        pil_image = self.load_img(path)
+
+        out_dict = {}
+        class_path = self.local_classes[idx]
+        pil_class = self.load_ann(class_path)
+
+        if self.local_instances is not None:
+            instance_path = self.local_instances[idx] # DEBUG: from classes to instances, may affect CelebA
+            pil_instance = self.load_ann(instance_path)
+        else:
+            pil_instance = None
+
+
+        # TODO : move flips and crops to DataLoader
+        if self.augment:
+            arr_image, arr_class, arr_instance = self.get_augmentation([pil_image, pil_class, pil_instance])
+        else:
+            arr_image, arr_class, arr_instance = self.to_array([pil_image, pil_class, pil_instance])
+
+
+        # Generate target maps
+        target_dict = self.gen_targets(arr_class, (self.resolution, self.resolution))
+
+        # TODO : Update normalization
+        arr_image = arr_image.astype(np.float32) / 127.5 - 1
+
+        # Convert instance maps to binary
+        # TODO : do we need this?
+        arr_class = self.relabel_class(arr_class)
+
+        out_dict['path'] = path
+        out_dict['label_ori'] = arr_class.copy()
+
+        # out_dict.update(target_dict)
+
+        if self.class_cond:
+            arr_class = self.update_label(arr_class)
+
+        if self.use_hv_map:
+            out_dict['label'] = np.transpose(target_dict['hv_map'], (2, 0, 1))
+        else:
+            out_dict['label'] = arr_class[None, ]
+
+        if arr_instance is not None:
+            out_dict['instance'] = arr_instance[None, ]
+
+        return np.transpose(arr_image, [2, 0, 1]), out_dict
+
+    def load_img(self, path):
+
+        with bf.BlobFile(path, "rb") as f:
+            pil_image = Image.open(f)
+            pil_image.load()
+        pil_image = pil_image.convert("RGB")
+
+        return pil_image
+
+
+    def load_ann(self, path, with_type=False):
+        assert not with_type, "Not support"
+        # assumes that ann is HxW
+        with bf.BlobFile(path, "rb") as f:
+            pil_class = Image.open(f)
+            pil_class.load()
+        pil_class = pil_class.convert("L")
+
+        return pil_class
+
+    def get_augmentation(self, pil_images, mode=None, rng=None):
+
+        pil_image, pil_class, pil_instance = pil_images
+
+        if self.is_train:
+            if self.random_crop:
+                arr_image, arr_class, arr_instance = random_crop_arr([pil_image, pil_class, pil_instance], self.resolution)
+            else:
+                arr_image, arr_class, arr_instance = center_crop_arr([pil_image, pil_class, pil_instance], self.resolution)
+        else:
+            arr_image, arr_class, arr_instance = resize_arr([pil_image, pil_class, pil_instance], self.resolution, keep_aspect=False)
+
+        if self.random_flip and random.random() < 0.5:
+            arr_image = arr_image[:, ::-1].copy()
+            arr_class = arr_class[:, ::-1].copy()
+            arr_instance = arr_instance[:, ::-1].copy() if arr_instance is not None else None
+
+        return arr_image, arr_class, arr_instance
+    
+    def to_array(self, pil_images):
+
+        pil_image, pil_class, pil_instance = pil_images
+
+        arr_image = np.array(pil_image)
+        arr_class = np.array(pil_class)
+        arr_instance = np.array(pil_instance) if pil_instance is not None else None
+
+        return arr_image, arr_class, arr_instance
+
+
+    def relabel_class(self, arr_class):
+        """Convert labels in multilabel classes"""
+        if self.dataset_mode == "dsb2018":
+            arr_class[arr_class>0] = 255
+
+        return arr_class
+
+    def update_label(self, arr_class):
+
+        if self.dataset_mode == 'dsb2018':
+            arr_class[arr_class == 255] = 1
+        elif self.dataset_mode == 'monuseg':
+            arr_class[arr_class == 255] = 1
+        else:
+            raise NotImplementedError()
+        
+        assert np.max(arr_class) == self.num_classes, "Maximum value in mask cannot exceed number of classes"
+            
+        return arr_class
+
 
 
 def resize_arr(pil_list, image_size, keep_aspect=True):
