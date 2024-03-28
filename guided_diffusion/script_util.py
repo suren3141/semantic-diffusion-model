@@ -140,7 +140,7 @@ def create_model(
     num_res_blocks,
     channel_mult="",
     learn_sigma=False,
-    class_cond=False,
+    class_cond=False,   # sri
     use_checkpoint=False,
     attention_resolutions="16",
     num_heads=1,
@@ -172,7 +172,8 @@ def create_model(
         attention_ds.append(image_size // int(res))
 
     num_classes = num_classes if no_instance else num_classes + 1
-
+    # num_classes= num_classes if class_cond else None  # Sri
+    
     return UNetModel(
         image_size=image_size,
         in_channels=3,
@@ -182,7 +183,7 @@ def create_model(
         attention_resolutions=tuple(attention_ds),
         dropout=dropout,
         channel_mult=channel_mult,
-        num_classes=(num_classes if class_cond else None),
+        num_classes=num_classes,
         use_checkpoint=use_checkpoint,
         use_fp16=use_fp16,
         num_heads=num_heads,

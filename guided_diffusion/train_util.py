@@ -40,11 +40,13 @@ class TrainLoop:
         schedule_sampler=None,
         weight_decay=0.0,
         lr_anneal_steps=0,
+        class_cond=False
     ):
         self.model = model
         self.diffusion = diffusion
         self.data = data
         self.num_classes = num_classes
+        self.class_cond = class_cond
         self.batch_size = batch_size
         self.microbatch = microbatch if microbatch > 0 else batch_size
         self.lr = lr
@@ -263,15 +265,19 @@ class TrainLoop:
         dist.barrier()
 
     def preprocess_input(self, data):
-        # move to GPU and change data types
-        data['label'] = data['label'].long()
 
-        # create one-hot label map
-        label_map = data['label']
-        bs, _, h, w = label_map.size()
-        nc = self.num_classes
-        input_label = th.FloatTensor(bs, nc, h, w).zero_()
-        input_semantics = input_label.scatter_(1, label_map, 1.0)
+        if self.class_cond:
+            # move to GPU and change data types
+            # data['label'] = data['label'].long()
+            # create one-hot label map
+            label_map = data['label'].long()
+            bs, _, h, w = label_map.size()
+            nc = self.num_classes
+            input_label = th.FloatTensor(bs, nc, h, w).zero_()
+            input_semantics = input_label.scatter_(1, label_map, 1.0)
+
+        else:
+            input_semantics = data['label']
 
         # concatenate instance map if it exists
         if 'instance' in data:
@@ -283,7 +289,8 @@ class TrainLoop:
             mask = (th.rand([input_semantics.shape[0], 1, 1, 1]) > self.drop_rate).float()
             input_semantics = input_semantics * mask
 
-        cond = {key: value for key, value in data.items() if key not in ['label', 'instance', 'path', 'label_ori']}
+        cond = {key: value for key, value in data.items() 
+                if key not in ['label', 'instance', 'path', 'label_ori', 'hv_map', 'np_map']}
         cond['y'] = input_semantics
 
         return cond
