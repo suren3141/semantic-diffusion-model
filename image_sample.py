@@ -46,7 +46,9 @@ def main():
         deterministic=True,
         random_crop=False,
         random_flip=False,
-        is_train=False
+        is_train=False,
+        num_classes=args.num_classes,
+        use_hv_map=args.use_hv_map,
     )
 
     if args.use_fp16:
@@ -132,6 +134,7 @@ def create_argparser():
     defaults = dict(
         data_dir="",
         dataset_mode="",
+        use_hv_map=False,
         clip_denoised=True,
         num_samples=10000,
         batch_size=1,
