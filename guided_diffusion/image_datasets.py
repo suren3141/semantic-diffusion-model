@@ -7,6 +7,8 @@ import blobfile as bf
 from mpi4py import MPI
 import numpy as np
 from torch.utils.data import DataLoader, Dataset
+from torchvision import transforms
+
 
 import importlib
 
@@ -23,6 +25,7 @@ def load_data(
     random_crop=True,
     random_flip=True,
     is_train=True,
+    in_channels=3,
 ):
     """
     For a dataset, create a generator over (images, kwargs) pairs.
@@ -47,12 +50,10 @@ def load_data(
 
     nuclei_datasets = ["dsb2018", "monuseg"]
 
-    is_rgb = True
     if dataset_mode == 'dsb2018':
         all_files = _list_image_files_recursively(os.path.join(data_dir, 'train' if is_train else 'test', 'images'))
         classes = _list_image_files_recursively(os.path.join(data_dir, 'train' if is_train else 'test', 'masks'))
         instances = None
-        is_rgb = False
     elif dataset_mode == 'monuseg':
         all_files = _list_image_files_recursively(os.path.join(data_dir, 'MoNuSegTrainingData' if is_train else 'MoNuSegTestData', 'images'))
         classes = _list_image_files_recursively(os.path.join(data_dir, 'MoNuSegTrainingData' if is_train else 'MoNuSegTestData', 'bin_masks'))
@@ -82,6 +83,7 @@ def load_data(
 
     print("Len of Dataset:", len(all_files))
 
+
     if dataset_mode in nuclei_datasets:
 
         dataset = NucleiDataset(
@@ -97,8 +99,8 @@ def load_data(
             random_crop=random_crop,
             random_flip=random_flip,
             is_train=is_train,
-            is_rgb=is_rgb,
             use_hv_map=use_hv_map,
+            in_channels=in_channels
         )
 
     else:
@@ -115,14 +117,11 @@ def load_data(
             is_train=is_train
         )
 
-    if deterministic:
-        loader = DataLoader(
-            dataset, batch_size=batch_size, shuffle=False, num_workers=1, drop_last=True
-        )
-    else:
-        loader = DataLoader(
-            dataset, batch_size=batch_size, shuffle=True, num_workers=1, drop_last=True
-        )
+
+    loader = DataLoader(
+        dataset, batch_size=batch_size, shuffle=not deterministic, num_workers=1, drop_last=True,
+    )
+
     while True:
         yield from loader
 
@@ -248,8 +247,9 @@ class NucleiDataset(Dataset):
         random_crop=False,
         random_flip=True,
         is_train=True,
-        is_rgb = True,
-        use_hv_map = False,
+        use_hv_map=False,
+        in_channels=3,
+        augment=False,
     ):
         super().__init__()
         self.is_train = is_train
@@ -260,7 +260,7 @@ class NucleiDataset(Dataset):
         self.local_instances = None if instances is None else instances[shard:][::num_shards]
         self.random_crop = random_crop
         self.random_flip = random_flip
-        self.augment = False
+        self.augment = augment
 
         targets = importlib.import_module('hover_net.models.hovernet.targets')
         self.gen_targets = getattr(targets, 'gen_targets')
@@ -268,7 +268,7 @@ class NucleiDataset(Dataset):
         self.class_cond = class_cond
         self.num_classes = num_classes
         self.use_hv_map = use_hv_map
-        self.is_rgb = is_rgb
+        self.in_channels = in_channels
 
     def __len__(self):
         return len(self.local_images)
@@ -289,12 +289,15 @@ class NucleiDataset(Dataset):
             pil_instance = None
 
 
-        # TODO : move flips and crops to DataLoader
+        # TODO : update augment fuction (resize vs crop)
         if self.augment:
             arr_image, arr_class, arr_instance = self.get_augmentation([pil_image, pil_class, pil_instance])
         else:
             arr_image, arr_class, arr_instance = self.to_array([pil_image, pil_class, pil_instance])
 
+        # Updated for dsb
+        if self.in_channels == 1:
+            arr_image = np.expand_dims(arr_image, -1)
 
         # Generate target maps
         target_dict = self.gen_targets(arr_class, (self.resolution, self.resolution))
@@ -329,7 +332,11 @@ class NucleiDataset(Dataset):
         with bf.BlobFile(path, "rb") as f:
             pil_image = Image.open(f)
             pil_image.load()
-        pil_image = pil_image.convert("RGB")
+
+        if self.in_channels == 3:
+            pil_image = pil_image.convert("RGB")
+        elif self.in_channels == 1:
+            pil_image = pil_image.convert("L")
 
         return pil_image
 
@@ -344,7 +351,7 @@ class NucleiDataset(Dataset):
 
         return pil_class
 
-    def get_augmentation(self, pil_images, mode=None, rng=None):
+    def get_augmentation(self, pil_images):
 
         pil_image, pil_class, pil_instance = pil_images
 

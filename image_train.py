@@ -40,6 +40,7 @@ def main():
         num_classes=args.num_classes,
         is_train=args.is_train,
         use_hv_map=args.use_hv_map,
+        in_channels=args.in_channels,
     )
 
     logger.log("training...")
@@ -78,11 +79,12 @@ def create_argparser():
         ema_rate="0.9999",  # comma-separated list of EMA values
         drop_rate=0.0,
         log_interval=10,
-        save_interval=10000,
+        save_interval=30000,
         resume_checkpoint="",
         use_fp16=False,
         fp16_scale_growth=1e-3,
-        is_train=True
+        is_train=True,
+        use_hv_map=False,
     )
     defaults.update(model_and_diffusion_defaults())
     parser = argparse.ArgumentParser()
