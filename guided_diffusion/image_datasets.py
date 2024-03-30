@@ -275,7 +275,13 @@ class NucleiDataset(Dataset):
 
         assert not (self.class_cond and self.use_hv_map), "HV maps cannot be used with class conditioning. Class conditioning requires segmentation masks"
 
-        assert self.class_cond and self.num_classes is not None, "Set number of classes if class conditioning is required."
+        if self.class_cond:
+            assert self.num_classes > 1, "Set number of classes if class conditioning is required."
+
+        # TODO : change later. Manually set for now
+        if dataset_mode == "dsb2018":
+            self.augment = True
+
 
 
     def __len__(self):
