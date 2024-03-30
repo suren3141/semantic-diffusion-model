@@ -262,13 +262,21 @@ class NucleiDataset(Dataset):
         self.random_flip = random_flip
         self.augment = augment
 
-        targets = importlib.import_module('hover_net.models.hovernet.targets')
-        self.gen_targets = getattr(targets, 'gen_targets')
-
         self.class_cond = class_cond
         self.num_classes = num_classes
         self.use_hv_map = use_hv_map
         self.in_channels = in_channels
+
+        if self.use_hv_map:
+            targets = importlib.import_module('hover_net.models.hovernet.targets')
+            self.gen_targets = getattr(targets, 'gen_targets')
+        else:
+            self.get_targets = None
+
+        assert not (self.class_cond and self.use_hv_map), "HV maps cannot be used with class conditioning. Class conditioning requires segmentation masks"
+
+        assert self.class_cond and self.num_classes is not None, "Set number of classes if class conditioning is required."
+
 
     def __len__(self):
         return len(self.local_images)
@@ -299,9 +307,6 @@ class NucleiDataset(Dataset):
         if self.in_channels == 1:
             arr_image = np.expand_dims(arr_image, -1)
 
-        # Generate target maps
-        target_dict = self.gen_targets(arr_class, (self.resolution, self.resolution))
-
         # TODO : Update normalization
         arr_image = arr_image.astype(np.float32) / 127.5 - 1
 
@@ -314,12 +319,16 @@ class NucleiDataset(Dataset):
 
         # out_dict.update(target_dict)
 
-        if self.class_cond:
-            arr_class = self.update_label(arr_class)
 
         if self.use_hv_map:
+            # Generate target maps
+            target_dict = self.gen_targets(arr_class, (self.resolution, self.resolution))
+
             out_dict['label'] = np.transpose(target_dict['hv_map'], (2, 0, 1))
         else:
+            if self.class_cond:
+                arr_class = self.update_label(arr_class)
+
             out_dict['label'] = arr_class[None, ]
 
         if arr_instance is not None:
@@ -397,7 +406,8 @@ class NucleiDataset(Dataset):
         else:
             raise NotImplementedError()
         
-        assert np.max(arr_class) == self.num_classes, "Maximum value in mask cannot exceed number of classes"
+        assert len(np.unique(arr_class)) == self.num_classes
+        assert np.max(arr_class) == self.num_classes-1, "Maximum value in mask cannot exceed number of classes"
             
         return arr_class
 
