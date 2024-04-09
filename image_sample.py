@@ -49,6 +49,7 @@ def main():
         is_train=False,
         num_classes=args.num_classes,
         use_hv_map=args.use_hv_map,
+        in_channels=args.in_channels,
     )
 
     if args.use_fp16:
@@ -77,7 +78,7 @@ def main():
         )
         sample = sample_fn(
             model,
-            (args.batch_size, 3, image.shape[2], image.shape[3]),
+            (args.batch_size, args.in_channels, image.shape[2], image.shape[3]),
             clip_denoised=args.clip_denoised,
             model_kwargs=model_kwargs,
             progress=True

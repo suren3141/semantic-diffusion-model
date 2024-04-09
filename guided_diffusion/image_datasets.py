@@ -281,6 +281,7 @@ class NucleiDataset(Dataset):
         # TODO : change later. Manually set for now
         if dataset_mode == "dsb2018":
             self.augment = True
+            assert self.in_channels == 1, "set in_channels to 1"
 
 
 
