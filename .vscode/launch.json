@@ -1,0 +1,78 @@
+{
+    "configurations": [
+        {
+            "name": "Python Debugger: image_sample",
+            "type": "debugpy",
+            "request": "launch",
+            "cwd": "/workspace/semantic-diffusion-model",
+            "program": "image_sample.py",
+            "console": "integratedTerminal",
+            "env": {
+                // "OPENAI_LOGDIR" : "/mnt/dataset/semantic-diffusion-model/dsb2018",
+                // "CUDA_VISIBLE_DEVICES": "2"
+            },
+            "args": [
+                "--data_dir", "/mnt/dataset/MoNuSeg/patches_256x256_128x128/names_37_14/TCGA-AC-A2FO-01A-01-TS1/", 
+                "--dataset_mode", "monuseg", 
+                "--attention_resolutions", "32,16,8", 
+                "--diffusion_steps", "1000", 
+                "--image_size", "256", 
+                "--learn_sigma", "True", 
+                "--noise_schedule", "linear", 
+                "--num_channels", "128", 
+                "--num_head_channels", "32", 
+                "--num_res_blocks", "2", 
+                "--resblock_updown", "True", 
+                "--use_fp16", "True", 
+                "--use_scale_shift_norm", "True", 
+                "--num_classes", "2", 
+                "--class_cond", "False",
+                "--use_hv_map", "True", 
+                "--no_instance", "True", 
+                "--batch_size", "2", 
+                "--num_samples", "10", 
+                "--model_path", "/mnt/dataset/semantic-diffusion-model/monuseg_patches_128CH_hv/names_37_14/TCGA-18-5592-01Z-00-DX1/ema_0.9999_090000.pt", 
+                "--results_path", "/mnt/dataset/MoNuSeg/out_sdm_128CH_hv/patches_256x256_128x128/names_37_14/TCGA-18-5592-01Z-00-DX1/TCGA-AC-A2FO-01A-01-TS1/output_s1.2_ema_0.9999_090000", 
+                "--s", "1.2"
+            ]
+        },
+        {
+            "name": "Python Debugger: image_train",
+            "type": "debugpy",
+            "request": "launch",
+            "cwd": "/workspace/semantic-diffusion-model",
+            "program": "image_train.py",
+            "console": "integratedTerminal",
+            "env": {
+                "OPENAI_LOGDIR" : "/mnt/dataset/semantic-diffusion-model/monuseg_patches_128CH_hv/ResNet18_kmeans_10_v1.1/4/",
+                "OPENAI_LOG_FORMAT" : "stdout,log,csv,tensorboard",
+                "CUDA_VISIBLE_DEVICES": "0"
+            },
+            "args": [
+                "--data_dir", "/mnt/dataset/MoNuSeg/patches_256x256_128x128/ResNet18_kmeans_10_v1.1/4/", 
+                "--dataset_mode", "monuseg", 
+                "--lr", "1e-4",
+                "--batch_size", "2", 
+                "--attention_resolutions", "32,16,8", 
+                "--diffusion_steps", "1000", 
+                "--image_size", "256", 
+                "--learn_sigma", "True", 
+                "--noise_schedule", "linear", 
+                "--num_channels", "128", 
+                "--num_head_channels", "64", 
+                "--num_res_blocks", "2", 
+                "--resblock_updown", "True", 
+                "--use_fp16", "True", 
+                "--use_scale_shift_norm", "True", 
+                "--use_checkpoint", "True",
+                "--num_classes", "2", 
+                "--class_cond", "False",
+                "--use_hv_map", "True", 
+                "--no_instance", "True", 
+                // "--drop_rate", "0.2",
+                // "--resume_checkpoint", "OUTPUT/ADE20K-SDM-256CH/model.pt",
+                // "--resume_checkpoint", "/mnt/dataset/semantic-diffusion-model/net_sdm_coco/ema_0.9999_best.pt", 
+            ]
+        }
+    ]
+}

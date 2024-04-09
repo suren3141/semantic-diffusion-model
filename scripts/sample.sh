@@ -11,8 +11,9 @@ for iter in 030000 090000 150000 210000; do
         --learn_sigma True --noise_schedule linear --num_channels 128 --num_head_channels 32 --num_res_blocks 2 \
         --resblock_updown True --use_fp16 True --use_scale_shift_norm True --num_classes 2 --class_cond False \
         --use_hv_map True --no_instance True --batch_size 2 --num_samples 10 \
-        --model_path 
+        --model_path $model_path
         --results_path $out_dir --s $s_val
-    done 
+    done
 done
+
 
