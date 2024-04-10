@@ -43,6 +43,18 @@ def main():
         in_channels=args.in_channels,
     )
 
+    val_data = load_data(
+        dataset_mode=args.dataset_mode,
+        data_dir=args.data_dir,
+        batch_size=args.batch_size,
+        image_size=args.image_size,
+        class_cond=args.class_cond,
+        num_classes=args.num_classes,
+        is_train=False,
+        use_hv_map=args.use_hv_map,
+        in_channels=args.in_channels,
+    )
+
     logger.log("training...")
     TrainLoop(
         model=model,
@@ -62,7 +74,8 @@ def main():
         schedule_sampler=schedule_sampler,
         weight_decay=args.weight_decay,
         lr_anneal_steps=args.lr_anneal_steps,
-        class_cond=args.class_cond
+        class_cond=args.class_cond,
+        val_data=val_data,
     ).run_loop()
 
 

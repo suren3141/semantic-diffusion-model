@@ -158,17 +158,22 @@ class TensorBoardOutputFormat(KVWriter):
         self.step = 1
         prefix = "events"
         path = osp.join(osp.abspath(dir), prefix)
-        import tensorflow as tf
-        from tensorflow.python import pywrap_tensorflow
-        from tensorflow.core.util import event_pb2
-        from tensorflow.python.util import compat
+        # import tensorflow as tf
+        # from tensorflow.python import pywrap_tensorflow
+        # from tensorflow.core.util import event_pb2
+        # from tensorflow.python.util import compat
 
-        self.tf = tf
+        from tensorboardX import SummaryWriter
+
+        self.tf = None
+        # self.tf = tf
         # self.event_pb2 = event_pb2
         # self.pywrap_tensorflow = pywrap_tensorflow
         # self.writer = pywrap_tensorflow.EventsWriter(compat.as_bytes(path))
 
-        self.writer = tf.summary.create_file_writer(compat.as_bytes(path))
+        # self.writer = tf.summary.create_file_writer(compat.as_bytes(path))
+        self.writer = SummaryWriter(path)
+
 
 
     def writekvs(self, kvs):
@@ -176,10 +181,26 @@ class TensorBoardOutputFormat(KVWriter):
             kwargs = {"tag": k, "simple_value": float(v)}
             return self.tf.Summary.Value(**kwargs)
         
-        with self.writer.as_default():
+        print(kvs)
+        if 'step' in kvs:
+            self.step = int(kvs['step'])
+
+        if 'mode' in kvs:
+            mode = kvs.pop('mode')
+        else:
+            mode = 'train'
+        
+        if self.tf is None:
             for k, v in kvs.items():
-                self.tf.summary.scalar(k, v, step=self.step)
-            self.writer.flush()
+                self.writer.add_scalar(f"{mode}_{k}", v, self.step)
+
+        else: 
+            with self.writer.as_default():
+                for k, v in kvs.items():
+                    self.tf.summary.scalar(k, v, step=self.step)
+
+        self.writer.flush()
+
         
         '''
         summary = self.tf.Summary(value=[summary_val(k, v) for k, v in kvs.items()])
