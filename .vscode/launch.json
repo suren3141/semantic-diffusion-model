@@ -12,15 +12,17 @@
                 // "CUDA_VISIBLE_DEVICES": "2"
             },
             "args": [
-                "--data_dir", "/mnt/dataset/MoNuSeg/patches_256x256_128x128/names_37_14/TCGA-AC-A2FO-01A-01-TS1/", 
+                "--data_dir", "/mnt/dataset/MoNuSeg/patches_256x256_128x128/",
+                // "--data_dir", "/mnt/dataset/MoNuSeg/patches_256x256_128x128/ResNet18_kmeans_10_v1.1/4",
+                // "--data_dir", "/mnt/dataset/MoNuSeg/patches_256x256_128x128/names_37_14/TCGA-49-4488-01Z-00-DX1/", 
                 "--dataset_mode", "monuseg", 
                 "--attention_resolutions", "32,16,8", 
-                "--diffusion_steps", "1000", 
+                "--diffusion_steps", "200", 
                 "--image_size", "256", 
                 "--learn_sigma", "True", 
                 "--noise_schedule", "linear", 
                 "--num_channels", "128", 
-                "--num_head_channels", "32", 
+                "--num_head_channels", "64", 
                 "--num_res_blocks", "2", 
                 "--resblock_updown", "True", 
                 "--use_fp16", "True", 
@@ -31,9 +33,15 @@
                 "--no_instance", "True", 
                 "--batch_size", "2", 
                 "--num_samples", "10", 
-                "--model_path", "/mnt/dataset/semantic-diffusion-model/monuseg_patches_128CH_hv/names_37_14/TCGA-18-5592-01Z-00-DX1/ema_0.9999_090000.pt", 
-                "--results_path", "/mnt/dataset/MoNuSeg/out_sdm_128CH_hv/patches_256x256_128x128/names_37_14/TCGA-18-5592-01Z-00-DX1/TCGA-AC-A2FO-01A-01-TS1/output_s1.2_ema_0.9999_090000", 
-                "--s", "1.2"
+                // "--model_path", "/mnt/dataset/semantic-diffusion-model/monuseg_patches_128CH_hv/names_37_14/TCGA-18-5592-01Z-00-DX1_unc_guidance_100k/ema_0.9999_090000.pt", 
+                // "--results_path", "/mnt/dataset/MoNuSeg/out_sdm_128CH_hv/patches_256x256_128x128/names_37_14/TCGA-18-5592-01Z-00-DX1_unc_guidance_100k/TCGA-49-4488-01Z-00-DX1/output_s2.0_ema_0.9999_090000", 
+                // "--model_path", "/mnt/dataset/semantic-diffusion-model/monuseg_patches_128CH_hv/ResNet18_kmeans_10_v1.1/4/ema_0.9999_060000.pt", 
+                // "--results_path", "/mnt/dataset/MoNuSeg/out_sdm_128CH_hv/patches_256x256_128x128/ResNet18_kmeans_10_v1.1/4/MoNuSegTrainingData/output_s1.5_ema_0.9999_060000", 
+                "--model_path", "/mnt/dataset/semantic-diffusion-model/monuseg_patches_128.64CH_200st_1e-4lr_hv/model010000.pt", 
+                "--results_path", "/mnt/dataset/MoNuSeg/out_sdm/monuseg_patches_128.64CH_200st_1e-4lr_hv/patches_256x256_128x128/output_s1.5_010000", 
+                // "--model_path", "/mnt/dataset/semantic-diffusion-model/monuseg_patches_128.64CH_1000st_1e-4lr_hv_ResNet18_kmeans_10_v1.1_4/model010000.pt",
+                // "--results_path", "/mnt/dataset/MoNuSeg/out_sdm/monuseg_patches_128.64CH_1000st_1e-4lr_hv_ResNet18_kmeans_10_v1.1_4/ResNet18_kmeans_10_v1.1/4/output_s1.5_010000", 
+                "--s", "1.5"
             ]
         },
         {
@@ -69,6 +77,7 @@
                 "--class_cond", "False",
                 "--use_hv_map", "True", 
                 "--no_instance", "True", 
+                "--save_interval", "001000"
                 // "--drop_rate", "0.2",
                 // "--resume_checkpoint", "OUTPUT/ADE20K-SDM-256CH/model.pt",
                 // "--resume_checkpoint", "/mnt/dataset/semantic-diffusion-model/net_sdm_coco/ema_0.9999_best.pt", 

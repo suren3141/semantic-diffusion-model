@@ -3,7 +3,7 @@ for iter in 030000 060000; do
     for s_val in 1.2 1.5 2.0 2.5; do
         num_channels=128
         num_head_channels=64
-        training_data=names_37_14/TCGA-18-5592-01Z-00-DX1
+        # training_data=names_37_14/TCGA-18-5592-01Z-00-DX1
         testing_data=/mnt/dataset/MoNuSeg/patches_256x256_128x128/ResNet18_kmeans_10_v1.1/4/
         model_path=/mnt/dataset/semantic-diffusion-model/monuseg_patches_128CH_hv/ResNet18_kmeans_10_v1.1/4/ema_0.9999_${iter}.pt \
         out_dir=/mnt/dataset/MoNuSeg/out_sdm_${num_channels}.${num_head_channels}CH_hv/patches_256x256_128x128/ResNet18_kmeans_10_v1.1/4/output_s${s_val}_ema_0.9999_${iter}
