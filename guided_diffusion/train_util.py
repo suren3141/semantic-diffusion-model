@@ -40,11 +40,15 @@ class TrainLoop:
         schedule_sampler=None,
         weight_decay=0.0,
         lr_anneal_steps=0,
+        class_cond=False,
+        val_data=None,
     ):
         self.model = model
         self.diffusion = diffusion
         self.data = data
+        self.val_data = val_data
         self.num_classes = num_classes
+        self.class_cond = class_cond
         self.batch_size = batch_size
         self.microbatch = microbatch if microbatch > 0 else batch_size
         self.lr = lr
@@ -172,10 +176,25 @@ class TrainLoop:
                 # Run for a finite amount of time in integration tests.
                 if os.environ.get("DIFFUSION_TRAINING_TEST", "") and self.step > 0:
                     return
+            if self.step % self.log_interval == 0:
+                self.eval_loop()    # get eval metrics
+                logger.dumpkvs()
+
             self.step += 1
         # Save the last checkpoint if it wasn't already saved.
         if (self.step - 1) % self.save_interval != 0:
             self.save()
+
+    def eval_loop(self):
+        self.model.eval()
+
+        with th.no_grad():
+            batch, cond = next(self.val_data)
+            cond = self.preprocess_input(cond)
+            self.eval_forward(batch, cond)
+            self.log_step({"mode":"val"})
+
+        self.model.train()
 
     def run_step(self, batch, cond):
         self.forward_backward(batch, cond)
@@ -184,6 +203,41 @@ class TrainLoop:
             self._update_ema()
         self._anneal_lr()
         self.log_step()
+
+    def eval_forward(self, batch, cond):
+
+        for i in range(0, batch.shape[0], self.microbatch):
+            micro = batch[i : i + self.microbatch].to(dist_util.dev())
+            micro_cond = {
+                k: v[i : i + self.microbatch].to(dist_util.dev())
+                for k, v in cond.items()
+            }
+            last_batch = (i + self.microbatch) >= batch.shape[0]
+            t, weights = self.schedule_sampler.sample(micro.shape[0], dist_util.dev())
+
+            compute_losses = functools.partial(
+                self.diffusion.training_losses,
+                self.ddp_model,
+                micro,
+                t,
+                model_kwargs=micro_cond,
+            )
+
+            if last_batch or not self.use_ddp:
+                losses = compute_losses()
+            else:
+                with self.ddp_model.no_sync():
+                    losses = compute_losses()
+
+            if isinstance(self.schedule_sampler, LossAwareSampler):
+                self.schedule_sampler.update_with_local_losses(
+                    t, losses["loss"].detach()
+                )
+
+            log_loss_dict(
+                self.diffusion, t, {k: v * weights for k, v in losses.items()},
+            )
+
 
     def forward_backward(self, batch, cond):
         self.mp_trainer.zero_grad()
@@ -233,9 +287,12 @@ class TrainLoop:
         for param_group in self.opt.param_groups:
             param_group["lr"] = lr
 
-    def log_step(self):
+    def log_step(self, dic=None):
         logger.logkv("step", self.step + self.resume_step)
         logger.logkv("samples", (self.step + self.resume_step + 1) * self.global_batch)
+        if dic is not None:
+            for k, v in dic.items(): logger.logkv(k, v)
+
 
     def save(self):
         def save_checkpoint(rate, params):
@@ -263,15 +320,19 @@ class TrainLoop:
         dist.barrier()
 
     def preprocess_input(self, data):
-        # move to GPU and change data types
-        data['label'] = data['label'].long()
 
-        # create one-hot label map
-        label_map = data['label']
-        bs, _, h, w = label_map.size()
-        nc = self.num_classes
-        input_label = th.FloatTensor(bs, nc, h, w).zero_()
-        input_semantics = input_label.scatter_(1, label_map, 1.0)
+        if self.class_cond:
+            # move to GPU and change data types
+            # data['label'] = data['label'].long()
+            # create one-hot label map
+            label_map = data['label'].long()
+            bs, _, h, w = label_map.size()
+            nc = self.num_classes
+            input_label = th.FloatTensor(bs, nc, h, w).zero_()
+            input_semantics = input_label.scatter_(1, label_map, 1.0)
+
+        else:
+            input_semantics = data['label']
 
         # concatenate instance map if it exists
         if 'instance' in data:
@@ -283,7 +344,8 @@ class TrainLoop:
             mask = (th.rand([input_semantics.shape[0], 1, 1, 1]) > self.drop_rate).float()
             input_semantics = input_semantics * mask
 
-        cond = {key: value for key, value in data.items() if key not in ['label', 'instance', 'path', 'label_ori']}
+        cond = {key: value for key, value in data.items() 
+                if key not in ['label', 'instance', 'path', 'label_ori', 'hv_map', 'np_map']}
         cond['y'] = input_semantics
 
         return cond
@@ -334,10 +396,10 @@ def find_ema_checkpoint(main_checkpoint, step, rate):
     return None
 
 
-def log_loss_dict(diffusion, ts, losses):
+def log_loss_dict(diffusion, ts, losses, prefix=""):
     for key, values in losses.items():
-        logger.logkv_mean(key, values.mean().item())
+        logger.logkv_mean(f"{prefix}{key}", values.mean().item())
         # Log the quantiles (four quartiles, in particular).
         for sub_t, sub_loss in zip(ts.cpu().numpy(), values.detach().cpu().numpy()):
             quartile = int(4 * sub_t / diffusion.num_timesteps)
-            logger.logkv_mean(f"{key}_q{quartile}", sub_loss)
+            logger.logkv_mean(f"{prefix}{key}_q{quartile}", sub_loss)

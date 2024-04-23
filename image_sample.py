@@ -46,7 +46,10 @@ def main():
         deterministic=True,
         random_crop=False,
         random_flip=False,
-        is_train=False
+        is_train=False,
+        num_classes=args.num_classes,
+        use_hv_map=args.use_hv_map,
+        in_channels=args.in_channels,
     )
 
     if args.use_fp16:
@@ -65,7 +68,7 @@ def main():
     for i, (batch, cond) in enumerate(data):
         image = ((batch + 1.0) / 2.0).cuda()
         label = (cond['label_ori'].float() / 255.0).cuda()
-        model_kwargs = preprocess_input(cond, num_classes=args.num_classes)
+        model_kwargs = preprocess_input(cond, num_classes=args.num_classes, class_cond=args.class_cond)
 
         # set hyperparameter
         model_kwargs['s'] = args.s
@@ -75,7 +78,7 @@ def main():
         )
         sample = sample_fn(
             model,
-            (args.batch_size, 3, image.shape[2], image.shape[3]),
+            (args.batch_size, args.in_channels, image.shape[2], image.shape[3]),
             clip_denoised=args.clip_denoised,
             model_kwargs=model_kwargs,
             progress=True
@@ -100,15 +103,19 @@ def main():
     logger.log("sampling complete")
 
 
-def preprocess_input(data, num_classes):
-    # move to GPU and change data types
-    data['label'] = data['label'].long()
+def preprocess_input(data, num_classes, class_cond=True):
+    if class_cond:
+        # move to GPU and change data types
+        # data['label'] = data['label'].long()
+        # create one-hot label map
+        label_map = data['label'].long()
+        bs, _, h, w = label_map.size()
+        nc = num_classes
+        input_label = th.FloatTensor(bs, nc, h, w).zero_()
+        input_semantics = input_label.scatter_(1, label_map, 1.0)
 
-    # create one-hot label map
-    label_map = data['label']
-    bs, _, h, w = label_map.size()
-    input_label = th.FloatTensor(bs, num_classes, h, w).zero_()
-    input_semantics = input_label.scatter_(1, label_map, 1.0)
+    else:
+        input_semantics = data['label']
 
     # concatenate instance map if it exists
     if 'instance' in data:
@@ -132,6 +139,7 @@ def create_argparser():
     defaults = dict(
         data_dir="",
         dataset_mode="",
+        use_hv_map=False,
         clip_denoised=True,
         num_samples=10000,
         batch_size=1,
