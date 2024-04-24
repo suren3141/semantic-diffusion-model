@@ -52,17 +52,17 @@
             "program": "image_train.py",
             "console": "integratedTerminal",
             "env": {
-                "OPENAI_LOGDIR" : "/mnt/dataset/semantic-diffusion-model/monuseg_patches_128CH_hv/ResNet18_kmeans_10_v1.1/4/",
+                "OPENAI_LOGDIR" : "/mnt/dataset/semantic-diffusion-model/monuseg/monuseg_patches_128.64CH_200st_1e-4lr_8bs_hv_ResNet18_kmeans_10_v1.1_4/",
                 "OPENAI_LOG_FORMAT" : "stdout,log,csv,tensorboard",
-                "CUDA_VISIBLE_DEVICES": "0"
+                // "CUDA_VISIBLE_DEVICES": "0"
             },
             "args": [
                 "--data_dir", "/mnt/dataset/MoNuSeg/patches_256x256_128x128/ResNet18_kmeans_10_v1.1/4/", 
                 "--dataset_mode", "monuseg", 
                 "--lr", "1e-4",
-                "--batch_size", "2", 
+                "--batch_size", "8", 
                 "--attention_resolutions", "32,16,8", 
-                "--diffusion_steps", "1000", 
+                "--diffusion_steps", "200", 
                 "--image_size", "256", 
                 "--learn_sigma", "True", 
                 "--noise_schedule", "linear", 
@@ -77,8 +77,8 @@
                 "--class_cond", "False",
                 "--use_hv_map", "True", 
                 "--no_instance", "True", 
-                "--save_interval", "001000"
-                // "--drop_rate", "0.2",
+                "--save_interval", "005000",
+                "--drop_rate", "0.2",
                 // "--resume_checkpoint", "OUTPUT/ADE20K-SDM-256CH/model.pt",
                 // "--resume_checkpoint", "/mnt/dataset/semantic-diffusion-model/net_sdm_coco/ema_0.9999_best.pt", 
             ]

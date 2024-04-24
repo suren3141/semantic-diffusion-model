@@ -1,15 +1,16 @@
 # for iter in 030000 090000 150000 210000; do
-for iter in 010000 020000 030000; do
+for iter in 030000 020000 010000; do
     for s_val in 1.2 1.5 2.0 2.5; do
+        for cluster in 0 1 2 3 4 5 6 7 8 9; do
         num_channels=128
         num_head_channels=64
-        steps=1000
+        steps=200
         lr=1e-4
         # training_data=names_37_14/TCGA-18-5592-01Z-00-DX1
-        testing_data=/mnt/dataset/MoNuSeg/patches_256x256_128x128/ResNet18_kmeans_10_v1.1/2/
-        model_name=monuseg_patches_${num_channels}.${num_head_channels}CH_${steps}st_${lr}lr_8bs_hv_ResNet18_kmeans_10_v1.1_2
+        testing_data=/mnt/dataset/MoNuSeg/patches_256x256_128x128/ResNet18_kmeans_10_v1.1/${cluster}/
+        model_name=monuseg_patches_${num_channels}.${num_head_channels}CH_${steps}st_${lr}lr_8bs_hv_ResNet18_kmeans_10_v1.1_4
         model_path=/mnt/dataset/semantic-diffusion-model/monuseg/${model_name}/model${iter}.pt \
-        out_dir=/mnt/dataset/MoNuSeg/out_sdm/${model_name}/ResNet18_kmeans_10_v1.1/2/output_s${s_val}_${iter}
+        out_dir=/mnt/dataset/MoNuSeg/out_sdm/${model_name}/ResNet18_kmeans_10_v1.1/${cluster}/output_s${s_val}_${iter}
         echo $out_dir
         python image_sample.py \
         --data_dir $testing_data \
@@ -20,6 +21,7 @@ for iter in 010000 020000 030000; do
         --model_path $model_path \
         --results_path $out_dir --s $s_val
         python /mnt/dataset/MoNuSeg/combine_outputs.py $out_dir
+        done
     done
 done
 
