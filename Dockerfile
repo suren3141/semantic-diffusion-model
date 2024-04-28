@@ -41,6 +41,15 @@ RUN pip install -e .
 
 WORKDIR /workspace
 RUN git clone https://github.com/suren3141/semantic-diffusion-model.git
+WORKDIR /workspace/hover_net
+RUN pip install -r requirements.txt
+
+WORKDIR /mnt/dataset
+RUN git clone https://github.com/suren3141/MoNuSegDataset.git MoNuSeg
+
+WORKDIR /workspace
+RUN git clone https://github.com/suren3141/hover_net.git
 WORKDIR /workspace/semantic-diffusion-model
+
 # RUN pip install -r environment/requirements.txt
 
