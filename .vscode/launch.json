@@ -54,7 +54,7 @@
             "env": {
                 "OPENAI_LOGDIR" : "/mnt/dataset/semantic-diffusion-model/monuseg/patches_valid_128.32CH_1000st_1e-4lr_8bs_hvb_cos",
                 "OPENAI_LOG_FORMAT" : "stdout,log,csv,tensorboard",
-                "CUDA_VISIBLE_DEVICES": "0"
+                // "CUDA_VISIBLE_DEVICES": "0"
             },
             "args": [
                 // "--data_dir", "/mnt/dataset/MoNuSeg/patches_256x256_128x128/ResNet18_kmeans_10_v1.1/4/", 
@@ -63,7 +63,7 @@
                 "--lr", "1e-4",
                 "--batch_size", "8", 
                 "--attention_resolutions", "32,16,8", 
-                "--diffusion_steps", "1000", 
+                "--diffusion_steps", "200", 
                 "--image_size", "256", 
                 "--learn_sigma", "True", 
                 "--noise_schedule", "cosine", 
