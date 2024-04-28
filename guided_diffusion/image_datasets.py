@@ -57,7 +57,7 @@ def load_data(
     elif dataset_mode == 'monuseg':
         all_files = _list_image_files_recursively(os.path.join(data_dir, 'MoNuSegTrainingData' if is_train else 'MoNuSegTestData', 'images'))
         classes = _list_image_files_recursively(os.path.join(data_dir, 'MoNuSegTrainingData' if is_train else 'MoNuSegTestData', 'bin_masks'))
-        instances = None
+        instances = _list_image_files_recursively(os.path.join(data_dir, 'MoNuSegTrainingData' if is_train else 'MoNuSegTestData', 'inst_masks'))
     elif dataset_mode == 'cityscapes':
         all_files = _list_image_files_recursively(os.path.join(data_dir, 'leftImg8bit', 'train' if is_train else 'val'))
         labels_file = _list_image_files_recursively(os.path.join(data_dir, 'gtFine', 'train' if is_train else 'val'))
@@ -299,7 +299,7 @@ class NucleiDataset(Dataset):
 
         if self.local_instances is not None:
             instance_path = self.local_instances[idx] # DEBUG: from classes to instances, may affect CelebA
-            pil_instance = self.load_ann(instance_path)
+            pil_instance = self.load_mask(instance_path)
         else:
             pil_instance = None
 
@@ -329,9 +329,16 @@ class NucleiDataset(Dataset):
 
         if self.use_hv_map:
             # Generate target maps
-            target_dict = self.gen_targets(arr_class, (self.resolution, self.resolution))
+            if arr_instance is not None:
+                target_dict = self.gen_targets(arr_instance, (self.resolution, self.resolution))
+            else:
+                target_dict = self.gen_targets(arr_class, (self.resolution, self.resolution))
 
-            out_dict['label'] = np.transpose(target_dict['hv_map'], (2, 0, 1))
+            # TODO : updated from 2 channels to 3 channels
+            # label = np.concatenate((target_dict['hv_map'], target_dict['np_map'][..., np.newaxis]), axis=-1)
+            label = target_dict['hv_map']
+
+            out_dict['label'] = np.transpose(label, (2, 0, 1))
         else:
             if self.class_cond:
                 arr_class = self.update_label(arr_class)
@@ -339,6 +346,8 @@ class NucleiDataset(Dataset):
             out_dict['label'] = arr_class[None, ]
 
         if arr_instance is not None:
+            # if arr_instance.dtype == np.uint16:
+            #     arr_instance = arr_instance.astype(np.int16)
             out_dict['instance'] = arr_instance[None, ]
 
         return np.transpose(arr_image, [2, 0, 1]), out_dict
@@ -364,6 +373,16 @@ class NucleiDataset(Dataset):
             pil_class = Image.open(f)
             pil_class.load()
         pil_class = pil_class.convert("L")
+
+        return pil_class
+
+    def load_mask(self, path, with_type=False):
+        assert not with_type, "Not support"
+        assert os.path.splitext(path)[-1] == '.tif', 'Mask must be .tif or update this function'
+        # assumes that ann is HxW
+        with bf.BlobFile(path, "rb") as f:
+            pil_class = Image.open(f)
+            pil_class.load()
 
         return pil_class
 

@@ -181,7 +181,7 @@ class TensorBoardOutputFormat(KVWriter):
             kwargs = {"tag": k, "simple_value": float(v)}
             return self.tf.Summary.Value(**kwargs)
         
-        print(kvs)
+        # print(kvs)
         if 'step' in kvs:
             self.step = int(kvs['step'])
 
