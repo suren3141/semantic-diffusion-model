@@ -57,7 +57,8 @@ def load_data(
     elif dataset_mode == 'monuseg':
         all_files = _list_image_files_recursively(os.path.join(data_dir, 'MoNuSegTrainingData' if is_train else 'MoNuSegTestData', 'images'))
         classes = _list_image_files_recursively(os.path.join(data_dir, 'MoNuSegTrainingData' if is_train else 'MoNuSegTestData', 'bin_masks'))
-        instances = _list_image_files_recursively(os.path.join(data_dir, 'MoNuSegTrainingData' if is_train else 'MoNuSegTestData', 'inst_masks'))
+        inst_path = os.path.join(data_dir, 'MoNuSegTrainingData' if is_train else 'MoNuSegTestData', 'inst_masks')
+        instances = None if not os.path.exists(inst_path) else _list_image_files_recursively(inst_path)
     elif dataset_mode == 'cityscapes':
         all_files = _list_image_files_recursively(os.path.join(data_dir, 'leftImg8bit', 'train' if is_train else 'val'))
         labels_file = _list_image_files_recursively(os.path.join(data_dir, 'gtFine', 'train' if is_train else 'val'))
