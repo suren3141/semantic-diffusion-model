@@ -26,6 +26,7 @@ def load_data(
     random_flip=True,
     is_train=True,
     in_channels=3,
+    subsample=None,
 ):
     """
     For a dataset, create a generator over (images, kwargs) pairs.
@@ -83,6 +84,13 @@ def load_data(
         raise NotImplementedError('{} not implemented'.format(dataset_mode))
 
     print("Len of Dataset:", len(all_files))
+
+    if subsample is not None:
+        np.random.seed(42)
+        ind = np.random.choice(len(all_files), int(len(all_files)*float(subsample)), replace=False)
+        all_files = [all_files[i] for i in ind]
+        classes = [classes[i] for i in ind]
+        instances = None if instances is None else [instances[i] for i in ind]
 
 
     if dataset_mode in nuclei_datasets:
