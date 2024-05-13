@@ -41,6 +41,7 @@ def main():
         is_train=args.is_train,
         use_hv_map=args.use_hv_map,
         in_channels=args.in_channels,
+        subsample=args.subsample,
     )
 
     val_data = load_data(
@@ -98,6 +99,7 @@ def create_argparser():
         fp16_scale_growth=1e-3,
         is_train=True,
         use_hv_map=False,
+        subsample=None
     )
     defaults.update(model_and_diffusion_defaults())
     parser = argparse.ArgumentParser()
