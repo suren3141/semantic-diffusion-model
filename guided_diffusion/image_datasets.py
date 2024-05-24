@@ -21,12 +21,15 @@ def load_data(
     class_cond=False,       # sri
     num_classes:int = None,
     use_hv_map = True,
+    use_col_map = False,
+    preserve_nuclei_col = False,
     deterministic=False,
     random_crop=True,
     random_flip=True,
     is_train=True,
     in_channels=3,
     subsample=None,
+    no_instance=False
 ):
     """
     For a dataset, create a generator over (images, kwargs) pairs.
@@ -58,8 +61,11 @@ def load_data(
     elif dataset_mode == 'monuseg':
         all_files = _list_image_files_recursively(os.path.join(data_dir, 'MoNuSegTrainingData' if is_train else 'MoNuSegTestData', 'images'))
         classes = _list_image_files_recursively(os.path.join(data_dir, 'MoNuSegTrainingData' if is_train else 'MoNuSegTestData', 'bin_masks'))
+        assert not no_instance, "no_instance is set to false. Sure ????"
         inst_path = os.path.join(data_dir, 'MoNuSegTrainingData' if is_train else 'MoNuSegTestData', 'inst_masks')
-        instances = None if not os.path.exists(inst_path) else _list_image_files_recursively(inst_path)
+        assert os.path.exists(inst_path)
+        instances = _list_image_files_recursively(inst_path)
+        # instances = None
     elif dataset_mode == 'cityscapes':
         all_files = _list_image_files_recursively(os.path.join(data_dir, 'leftImg8bit', 'train' if is_train else 'val'))
         labels_file = _list_image_files_recursively(os.path.join(data_dir, 'gtFine', 'train' if is_train else 'val'))
@@ -109,7 +115,10 @@ def load_data(
             random_flip=random_flip,
             is_train=is_train,
             use_hv_map=use_hv_map,
-            in_channels=in_channels
+            use_col_map=use_col_map,
+            preserve_nuclei_col=preserve_nuclei_col,
+            in_channels=in_channels,
+            no_instance=no_instance,
         )
 
     else:
@@ -150,6 +159,10 @@ def _list_image_files_recursively(data_dir):
 
 
 class ImageDataset(Dataset):
+    def __init__():
+        pass
+
+'''
     def __init__(
         self,
         dataset_mode,
@@ -239,7 +252,7 @@ class ImageDataset(Dataset):
             out_dict['instance'] = arr_instance[None, ]
 
         return np.transpose(arr_image, [2, 0, 1]), out_dict
-
+'''
 
 class NucleiDataset(Dataset):
     def __init__(
@@ -257,7 +270,10 @@ class NucleiDataset(Dataset):
         random_flip=True,
         is_train=True,
         use_hv_map=False,
+        use_col_map=False,
+        preserve_nuclei_col=False,
         in_channels=3,
+        no_instance=True,
         augment=False,
     ):
         super().__init__()
@@ -274,13 +290,17 @@ class NucleiDataset(Dataset):
         self.class_cond = class_cond
         self.num_classes = num_classes
         self.use_hv_map = use_hv_map
+        self.use_col_map = use_col_map
+        self.preserve_nuclei_col = preserve_nuclei_col
         self.in_channels = in_channels
+
+        self.no_instance = no_instance
 
         if self.use_hv_map:
             targets = importlib.import_module('hover_net.models.hovernet.targets')
-            self.gen_targets = getattr(targets, 'gen_targets')
+            self.gen_hv = getattr(targets, 'gen_targets')
         else:
-            self.get_targets = None
+            self.gen_hv = None
 
         assert not (self.class_cond and self.use_hv_map), "HV maps cannot be used with class conditioning. Class conditioning requires segmentation masks"
 
@@ -319,6 +339,10 @@ class NucleiDataset(Dataset):
         else:
             arr_image, arr_class, arr_instance = self.to_array([pil_image, pil_class, pil_instance])
 
+
+        if os.environ.get("DEBUG", "") in ("True", "true", "1"):
+            print("uniqe instances", np.unique(arr_instance), arr_instance.shape)
+
         # Updated for dsb
         if self.in_channels == 1:
             arr_image = np.expand_dims(arr_image, -1)
@@ -339,22 +363,49 @@ class NucleiDataset(Dataset):
         if self.use_hv_map:
             # Generate target maps
             if arr_instance is not None:
-                target_dict = self.gen_targets(arr_instance, (self.resolution, self.resolution))
+                target_dict = self.gen_hv(arr_instance, (self.resolution, self.resolution))
             else:
-                target_dict = self.gen_targets(arr_class, (self.resolution, self.resolution))
+                target_dict = self.gen_hv(arr_class, (self.resolution, self.resolution))
 
             # TODO : updated from 2 channels to 3 channels
             # label = np.concatenate((target_dict['hv_map'], target_dict['np_map'][..., np.newaxis]), axis=-1)
-            label = target_dict['hv_map']
+            hv_map = target_dict['hv_map']
 
-            out_dict['label'] = np.transpose(label, (2, 0, 1))
+            out_dict['label'] = np.transpose(hv_map, (2, 0, 1))
         else:
             if self.class_cond:
                 arr_class = self.update_label(arr_class)
 
             out_dict['label'] = arr_class[None, ]
 
-        if arr_instance is not None:
+        if self.use_col_map:
+            if self.preserve_nuclei_col:
+                h, w, c = arr_image.shape
+
+                # TODO : Check the code
+                # TODO : Improve this implemetation : only shuffle positive and negative colours
+
+                nuclei = arr_class.reshape(-1) > 0
+                nuclei_ind = np.where(nuclei)[0]
+                bg_ind = np.where(np.logical_not(nuclei))[0]
+
+                shuffle_idx = np.zeros(h*w).astype(int)
+                shuffle_idx[nuclei_ind] = np.random.permutation(nuclei_ind)
+                shuffle_idx[bg_ind] = np.random.permutation(bg_ind)
+
+                col_map = arr_image.reshape(-1, c)[shuffle_idx]
+                col_map = col_map.reshape(arr_image.shape)
+
+            else:
+                h, w, c = arr_image.shape
+                ind = np.random.permutation(h*w)
+                col_map = arr_image.reshape(-1, c)
+                col_map = (col_map[ind]).reshape(arr_image.shape)
+
+            out_dict['label']  = np.concatenate((out_dict['label'], np.transpose(col_map, (2, 0, 1))), axis=0)
+
+
+        if self.no_instance == False:
             # if arr_instance.dtype == np.uint16:
             #     arr_instance = arr_instance.astype(np.int16)
             out_dict['instance'] = arr_instance[None, ]
@@ -390,10 +441,10 @@ class NucleiDataset(Dataset):
         assert os.path.splitext(path)[-1] == '.tif', 'Mask must be .tif or update this function'
         # assumes that ann is HxW
         with bf.BlobFile(path, "rb") as f:
-            pil_class = Image.open(f)
-            pil_class.load()
+            pil_inst = Image.open(f)
+            pil_inst.load()
 
-        return pil_class
+        return pil_inst
 
     def get_augmentation(self, pil_images):
 
