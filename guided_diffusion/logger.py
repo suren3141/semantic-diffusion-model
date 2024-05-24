@@ -213,6 +213,13 @@ class TensorBoardOutputFormat(KVWriter):
         '''
         self.step += 1
 
+    def dumpimgs(self, imgs):
+        for k, v in imgs.items():
+            self.writer.add_image(k, v, self.step, dataformats='NCHW')
+
+        self.writer.flush()
+
+
     def close(self):
         if self.writer:
             self.writer.Close()
@@ -270,6 +277,11 @@ def dumpkvs():
     """
     return get_current().dumpkvs()
 
+def dumpimgs(imgs):
+    """
+    Write all of the diagnostics from the current iteration
+    """
+    return get_current().dumpimgs(imgs)
 
 def getkvs():
     return get_current().name2val
@@ -403,6 +415,12 @@ class Logger(object):
         self.name2val.clear()
         self.name2cnt.clear()
         return out
+    
+    def dumpimgs(self, imgs):
+        for fmt in self.output_formats:
+            if isinstance(fmt, TensorBoardOutputFormat):
+                fmt.dumpimgs(imgs)
+
 
     def log(self, *args, level=INFO):
         if self.level <= level:
