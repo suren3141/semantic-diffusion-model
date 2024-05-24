@@ -40,6 +40,8 @@ def main():
         num_classes=args.num_classes,
         is_train=args.is_train,
         use_hv_map=args.use_hv_map,
+        use_col_map=args.use_col_map,
+        preserve_nuclei_col=args.preserve_nuclei_col,
         in_channels=args.in_channels,
         subsample=args.subsample,
     )
@@ -53,6 +55,8 @@ def main():
         num_classes=args.num_classes,
         is_train=False,
         use_hv_map=args.use_hv_map,
+        use_col_map=args.use_col_map,
+        preserve_nuclei_col=args.preserve_nuclei_col,
         in_channels=args.in_channels,
     )
 
@@ -99,6 +103,8 @@ def create_argparser():
         fp16_scale_growth=1e-3,
         is_train=True,
         use_hv_map=False,
+        use_col_map=False,
+        preserve_nuclei_col=False,
         subsample=None
     )
     defaults.update(model_and_diffusion_defaults())

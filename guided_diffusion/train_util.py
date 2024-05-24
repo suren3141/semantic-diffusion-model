@@ -2,6 +2,8 @@ import copy
 import functools
 import os
 
+import torchvision as tv
+
 import blobfile as bf
 import torch as th
 import torch.distributed as dist
@@ -162,6 +164,7 @@ class TrainLoop:
                 self.opt.param_groups[0]['lr'] = self.lr
 
     def run_loop(self):
+        best_loss = float('inf')
         while (
             not self.lr_anneal_steps
             or self.step + self.resume_step < self.lr_anneal_steps
@@ -177,8 +180,16 @@ class TrainLoop:
                 if os.environ.get("DIFFUSION_TRAINING_TEST", "") and self.step > 0:
                     return
             if self.step % self.log_interval == 0:
-                self.eval_loop()    # get eval metrics
+                eval_loss = self.eval_loop()    # get eval metrics
                 logger.dumpkvs()
+                eval_loss = eval_loss['loss'].mean().item()
+
+                if eval_loss < best_loss:
+                    self.save(suffix="best")
+                    best_loss = eval_loss
+
+            if self.step % self.save_interval == 0:
+                self.sample_loop()
 
             self.step += 1
         # Save the last checkpoint if it wasn't already saved.
@@ -191,10 +202,79 @@ class TrainLoop:
         with th.no_grad():
             batch, cond = next(self.val_data)
             cond = self.preprocess_input(cond)
-            self.eval_forward(batch, cond)
+            val_loss = self.eval_forward(batch, cond)
             self.log_step({"mode":"val"})
 
         self.model.train()
+
+        return val_loss
+
+    def sample_loop(self):
+
+        def save_samples(batch, cond, sample, args, results_path):
+            image = ((batch + 1.0) / 2.0).cuda()
+            label = (cond['label_ori'].float() / 255.0).cuda()
+
+
+            image_path = os.path.join(results_path, 'images')
+            label_path = os.path.join(results_path, 'labels')
+            cond_path = os.path.join(results_path, 'cond')
+            sample_path = os.path.join(results_path, 'samples')
+            if not args.no_instance:
+                inst_path = os.path.join(results_path, 'inst_masks')
+                os.makedirs(inst_path, exist_ok=True)
+
+        def sample_batch(
+                model,
+                diffusion,
+                model_kwargs,
+                out_shape,
+                clip_denoised=True,
+                s = 1.5,
+                use_ddim = False,
+                ):
+
+            # set hyperparameter
+            model_kwargs['s'] = s
+
+            sample_fn = (
+                diffusion.p_sample_loop if not use_ddim else diffusion.ddim_sample_loop
+            )
+            sample = sample_fn(
+                model,
+                out_shape,
+                clip_denoised=clip_denoised,
+                model_kwargs=model_kwargs,
+                progress=True
+            )
+            sample = (sample + 1) / 2.0
+
+            return sample
+
+        self.model.eval()
+
+        with th.no_grad():
+            batch, cond = next(self.val_data)
+            model_kwargs = self.preprocess_input(cond)
+            sample = sample_batch(self.model, self.diffusion, model_kwargs, out_shape=batch.shape)
+
+            # sample = sample.cpu().numpy()
+            # image = ((batch + 1.0) / 2.0).cuda()
+            # label = (cond['label_ori'].float() / 255.0).cuda()
+
+            out = dict(
+                sample = sample ,
+                image = ((batch + 1.0) / 2.0).cuda() ,
+                label = (cond['label_ori'].float() / 255.0).cuda().unsqueeze(axis=1) ,
+            )
+
+            out['comb'] = th.cat((out['image'], out['label'].repeat(1, 3, 1, 1), out['sample']), 2)
+
+            logger.dumpimgs(out)
+
+        self.model.train()
+
+
 
     def run_step(self, batch, cond):
         self.forward_backward(batch, cond)
@@ -237,6 +317,8 @@ class TrainLoop:
             log_loss_dict(
                 self.diffusion, t, {k: v * weights for k, v in losses.items()},
             )
+
+            return losses
 
 
     def forward_backward(self, batch, cond):
@@ -294,21 +376,22 @@ class TrainLoop:
             for k, v in dic.items(): logger.logkv(k, v)
 
 
-    def save(self):
-        def save_checkpoint(rate, params):
+    def save(self, suffix=None):
+        def save_checkpoint(rate, params, suffix=None):
             state_dict = self.mp_trainer.master_params_to_state_dict(params)
+            if suffix is None: suffix = f"{(self.step+self.resume_step):06d}"
             if dist.get_rank() == 0:
                 logger.log(f"saving model {rate}...")
                 if not rate:
-                    filename = f"model{(self.step+self.resume_step):06d}.pt"
+                    filename = f"model{suffix}.pt"
                 else:
-                    filename = f"ema_{rate}_{(self.step+self.resume_step):06d}.pt"
+                    filename = f"ema_{rate}_{suffix}.pt"
                 with bf.BlobFile(bf.join(get_blob_logdir(), filename), "wb") as f:
                     th.save(state_dict, f)
 
-        save_checkpoint(0, self.mp_trainer.master_params)
+        save_checkpoint(0, self.mp_trainer.master_params, suffix=suffix)
         for rate, params in zip(self.ema_rate, self.ema_params):
-            save_checkpoint(rate, params)
+            save_checkpoint(rate, params, suffix=suffix)
 
         if dist.get_rank() == 0:
             with bf.BlobFile(
@@ -342,7 +425,19 @@ class TrainLoop:
 
         if self.drop_rate > 0.0:
             mask = (th.rand([input_semantics.shape[0], 1, 1, 1]) > self.drop_rate).float()
-            input_semantics = input_semantics * mask
+            if self.drop_hvb_only: # Drops only the hv map and boundaries (col_map stay same, only structure is removed)
+                # assume hv map is used
+                input_semantics[:, :2] = input_semantics[:, :2] * mask
+                if 'instance' in data:
+                    # borders are used
+                    input_semantics[:, -1:] = input_semantics[:, :-1] * mask
+                raise NotImplementedError("TODO : Test this function first before using")
+
+            else:
+                input_semantics = input_semantics * mask
+
+        # with open('tmp/semantics.png', 'w+') as fp:
+        #     tv.utils.save_image(input_semantics, fp)
 
         cond = {key: value for key, value in data.items() 
                 if key not in ['label', 'instance', 'path', 'label_ori', 'hv_map', 'np_map']}

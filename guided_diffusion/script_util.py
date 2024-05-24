@@ -175,7 +175,7 @@ def create_model(
     for res in attention_resolutions.split(","):
         attention_ds.append(image_size // int(res))
 
-    num_classes = num_classes if no_instance else num_classes + 1
+    # num_classes = num_classes if no_instance else num_classes + 1
     # num_classes= num_classes if class_cond else None  # Sri
     
     return UNetModel(
