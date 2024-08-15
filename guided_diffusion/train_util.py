@@ -44,6 +44,7 @@ class TrainLoop:
         lr_anneal_steps=0,
         class_cond=False,
         val_data=None,
+        drop_hvb_only=False,
     ):
         self.model = model
         self.diffusion = diffusion
@@ -68,6 +69,7 @@ class TrainLoop:
         self.schedule_sampler = schedule_sampler or UniformSampler(diffusion)
         self.weight_decay = weight_decay
         self.lr_anneal_steps = lr_anneal_steps
+        self.drop_hvb_only = drop_hvb_only
 
         self.step = 0
         self.resume_step = 0
@@ -163,6 +165,10 @@ class TrainLoop:
             if self.opt.param_groups[0]['lr'] != self.lr:
                 self.opt.param_groups[0]['lr'] = self.lr
 
+            # TODO : Update this later
+            # https://stackoverflow.com/questions/73095460/assertionerror-if-capturable-false-state-steps-should-not-be-cuda-tensors
+            self.opt.param_groups[0]['capturable'] = True
+
     def run_loop(self):
         best_loss = float('inf')
         while (
@@ -254,6 +260,14 @@ class TrainLoop:
         self.model.eval()
 
         with th.no_grad():
+            batch, cond = next(self.data)
+            model_kwargs = self.preprocess_input(cond)
+            sample = sample_batch(self.model, self.diffusion, model_kwargs, out_shape=batch.shape)
+
+            image = ((batch + 1.0) / 2.0).cuda()
+            label = (cond['label_ori'].float() / 255.0).cuda().unsqueeze(axis=1)
+            out_train = th.cat((image, label.repeat(1, 3, 1, 1), sample), 2)
+
             batch, cond = next(self.val_data)
             model_kwargs = self.preprocess_input(cond)
             sample = sample_batch(self.model, self.diffusion, model_kwargs, out_shape=batch.shape)
@@ -262,13 +276,14 @@ class TrainLoop:
             # image = ((batch + 1.0) / 2.0).cuda()
             # label = (cond['label_ori'].float() / 255.0).cuda()
 
-            out = dict(
-                sample = sample ,
-                image = ((batch + 1.0) / 2.0).cuda() ,
-                label = (cond['label_ori'].float() / 255.0).cuda().unsqueeze(axis=1) ,
-            )
+            image = ((batch + 1.0) / 2.0).cuda()
+            label = (cond['label_ori'].float() / 255.0).cuda().unsqueeze(axis=1)
+            out_val = th.cat((image, label.repeat(1, 3, 1, 1), sample), 2)
 
-            out['comb'] = th.cat((out['image'], out['label'].repeat(1, 3, 1, 1), out['sample']), 2)
+            out = dict(
+                sample_train = out_train,
+                sample_val = out_val
+            )
 
             logger.dumpimgs(out)
 
@@ -379,7 +394,6 @@ class TrainLoop:
     def save(self, suffix=None):
         def save_checkpoint(rate, params, suffix=None):
             state_dict = self.mp_trainer.master_params_to_state_dict(params)
-            if suffix is None: suffix = f"{(self.step+self.resume_step):06d}"
             if dist.get_rank() == 0:
                 logger.log(f"saving model {rate}...")
                 if not rate:
@@ -389,13 +403,14 @@ class TrainLoop:
                 with bf.BlobFile(bf.join(get_blob_logdir(), filename), "wb") as f:
                     th.save(state_dict, f)
 
+        if suffix is None: suffix = f"{(self.step+self.resume_step):06d}"
         save_checkpoint(0, self.mp_trainer.master_params, suffix=suffix)
         for rate, params in zip(self.ema_rate, self.ema_params):
             save_checkpoint(rate, params, suffix=suffix)
 
         if dist.get_rank() == 0:
             with bf.BlobFile(
-                bf.join(get_blob_logdir(), f"opt{(self.step+self.resume_step):06d}.pt"),
+                bf.join(get_blob_logdir(), f"opt{suffix}.pt"),
                 "wb",
             ) as f:
                 th.save(self.opt.state_dict(), f)
@@ -430,8 +445,8 @@ class TrainLoop:
                 input_semantics[:, :2] = input_semantics[:, :2] * mask
                 if 'instance' in data:
                     # borders are used
-                    input_semantics[:, -1:] = input_semantics[:, :-1] * mask
-                raise NotImplementedError("TODO : Test this function first before using")
+                    input_semantics[:, -1:] = input_semantics[:, -1:] * mask
+                # raise NotImplementedError("TODO : Test this function first before using")
 
             else:
                 input_semantics = input_semantics * mask

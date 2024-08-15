@@ -29,7 +29,10 @@ def load_data(
     is_train=True,
     in_channels=3,
     subsample=None,
-    no_instance=False
+    no_instance=False,
+    shuffle_masks=False,
+    match_struct=False,
+    augment=False,
 ):
     """
     For a dataset, create a generator over (images, kwargs) pairs.
@@ -101,6 +104,7 @@ def load_data(
 
     if dataset_mode in nuclei_datasets:
 
+
         dataset = NucleiDataset(
             dataset_mode,
             image_size,
@@ -119,6 +123,9 @@ def load_data(
             preserve_nuclei_col=preserve_nuclei_col,
             in_channels=in_channels,
             no_instance=no_instance,
+            shuffle_masks=shuffle_masks,
+            match_struct=match_struct,
+            augment=augment,
         )
 
     else:
@@ -274,6 +281,8 @@ class NucleiDataset(Dataset):
         preserve_nuclei_col=False,
         in_channels=3,
         no_instance=True,
+        shuffle_masks=False,
+        match_struct=False,
         augment=False,
     ):
         super().__init__()
@@ -311,6 +320,27 @@ class NucleiDataset(Dataset):
         if dataset_mode == "dsb2018":
             self.augment = True
             assert self.in_channels == 1, "set in_channels to 1"
+
+        if shuffle_masks:
+            if match_struct:
+                from .data_util import get_prop_diff, get_shape_properties_df
+
+                arr_inst = [np.array(self.load_mask(y)) for y in self.local_instances]
+                mask_props = get_shape_properties_df(arr_inst)
+
+                ind = []
+                
+                for idx, prop in mask_props.iterrows():
+                    diff = get_prop_diff(mask_props, prop)
+                    indices = (-diff['prob']).argsort()[:20].to_list()
+                    indices.remove(idx)
+                    ind.append(np.random.choice(indices))
+
+            else:
+                np.random.seed(42)
+                ind = np.random.choice(len(self.local_images), len(self.local_images), replace=False)
+            self.local_images = [self.local_images[i] for i in ind]
+
 
 
 

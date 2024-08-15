@@ -81,6 +81,7 @@ def main():
         lr_anneal_steps=args.lr_anneal_steps,
         class_cond=args.class_cond,
         val_data=val_data,
+        drop_hvb_only=args.drop_hvb_only,
     ).run_loop()
 
 
@@ -105,7 +106,10 @@ def create_argparser():
         use_hv_map=False,
         use_col_map=False,
         preserve_nuclei_col=False,
-        subsample=None
+        subsample=None,
+        drop_hvb_only=False,
+        shuffle_masks=False,
+        augment=False,
     )
     defaults.update(model_and_diffusion_defaults())
     parser = argparse.ArgumentParser()
