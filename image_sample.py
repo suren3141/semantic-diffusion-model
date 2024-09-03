@@ -97,6 +97,7 @@ def main():
         model.convert_to_fp16()
     model.eval()
 
+
     image_path = os.path.join(args.results_path, 'images')
     os.makedirs(image_path, exist_ok=True)
     label_path = os.path.join(args.results_path, 'labels')
@@ -138,26 +139,48 @@ def main():
 
         if 'instance' in cond:
             inst_map = cond['instance'].cpu().numpy().astype(np.uint16)
-            for j in range(inst_map.shape[0]):
-                inst_name = Path(cond['path'][j]).stem + '.tif'
-                Image.fromarray(inst_map[j].squeeze()).save(os.path.join(inst_path, inst_name))        
+        else:
+            inst_map = None
+
 
         for j in range(sample.shape[0]):
-            img_name = Path(cond['path'][j]).stem + '.png'
+            save_name = get_savename(file_path=image_path, file_name=Path(cond['path'][j]).stem, ext="png")
+            img_name = Path(save_name).stem + '.png'
+            # Save png images
             tv.utils.save_image(image[j], os.path.join(image_path, img_name))
             tv.utils.save_image(sample[j], os.path.join(sample_path, img_name))
             tv.utils.save_image(label[j], os.path.join(label_path, img_name))
 
+            # Save tif instance map
+            if inst_map is not None:
+                inst_name = Path(save_name).stem + '.tif'
+                Image.fromarray(inst_map[j].squeeze()).save(os.path.join(inst_path, inst_name))        
+
+            # Save entire condition map (1 channel, 3 channel, or 6 channel)
             visualize_cond(model_kwargs['y'][j], hv_map=args.use_hv_map, inst=not args.no_instance, col_map=args.use_col_map, 
                            out_path=os.path.join(cond_path, img_name))
 
         logger.log(f"created {len(all_samples) * args.batch_size} samples")
 
-        if len(all_samples) * args.batch_size > args.num_samples:
+        if len(all_samples) * args.batch_size > args.num_samples and args.num_samples != 0:
             break
 
     dist.barrier()
     logger.log("sampling complete")
+
+def get_savename(file_path, file_name, ext="png", mode="iterate"):
+
+    savename = os.path.join(file_path, f"{file_name}.{ext}")
+
+    if mode == "iterate":
+        counter = 0
+        while os.path.exists(savename):
+            savename = os.path.join(file_path, f"{file_name}_{counter}.{ext}")
+            counter += 1
+    elif mode == "overwrite":
+        pass
+
+    return savename
 
 
 def preprocess_input(data, num_classes, class_cond=True):
