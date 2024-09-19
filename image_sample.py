@@ -12,6 +12,7 @@ import torchvision as tv
 
 from PIL import Image
 import numpy as np
+from pathlib import Path
 
 from guided_diffusion.image_datasets import load_data
 
@@ -29,14 +30,15 @@ import importlib
 def visualize_cond(cond, hv_map=False, inst=False, col_map=False, out_path=None):
     out = []
     tmp = cond.cpu().numpy().transpose((1, 2, 0))
+    shape = tmp.shape[:2]
     if hv_map:
         hv_map = tmp[..., :2]
         tmp = tmp[..., 2:]
         targets = importlib.import_module('hover_net.models.hovernet.targets')
         vis_hv_map = getattr(targets, 'vis_hv_map')
-        hv_map = vis_hv_map(hv_map)
-        out.append(hv_map[:, :256, :])
-        out.append(hv_map[:, 256:, :])
+        hv_map = vis_hv_map(hv_map, shape)
+        out.append(hv_map[:, :shape[0], :])
+        out.append(hv_map[:, shape[0]:, :])
     if col_map:
         col_map = (tmp[..., :3] +1 ) * 127.5
         tmp = tmp[..., 3:]
@@ -86,6 +88,9 @@ def main():
         use_col_map=args.use_col_map,
         preserve_nuclei_col=args.preserve_nuclei_col,
         in_channels=args.in_channels,
+        shuffle_masks=args.shuffle_masks,
+        match_struct=args.match_struct,
+        augment=args.augment,
     )
 
     if args.use_fp16:
@@ -134,10 +139,11 @@ def main():
         if 'instance' in cond:
             inst_map = cond['instance'].cpu().numpy().astype(np.uint16)
             for j in range(inst_map.shape[0]):
-                Image.fromarray(inst_map[j].squeeze()).save(os.path.join(inst_path, cond['path'][j].split('/')[-1].split('.')[0] + '.tif'))        
+                inst_name = Path(cond['path'][j]).stem + '.tif'
+                Image.fromarray(inst_map[j].squeeze()).save(os.path.join(inst_path, inst_name))        
 
         for j in range(sample.shape[0]):
-            img_name = cond['path'][j].split('/')[-1].split('.')[0] + '.png'
+            img_name = Path(cond['path'][j]).stem + '.png'
             tv.utils.save_image(image[j], os.path.join(image_path, img_name))
             tv.utils.save_image(sample[j], os.path.join(sample_path, img_name))
             tv.utils.save_image(label[j], os.path.join(label_path, img_name))
@@ -203,6 +209,9 @@ def create_argparser():
         s=1.0,
         no_instance=False,
         use_train=False,
+        shuffle_masks=False,
+        match_struct=False,
+        augment=False,
     )
     defaults.update(model_and_diffusion_defaults())
     parser = argparse.ArgumentParser()

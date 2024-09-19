@@ -417,6 +417,8 @@ def create_gaussian_diffusion(
         loss_type = gd.LossType.RESCALED_MSE
     else:
         loss_type = gd.LossType.MSE
+    print("Loss : ", loss_type)
+    
     if not timestep_respacing:
         timestep_respacing = [steps]
     return SpacedDiffusion(
