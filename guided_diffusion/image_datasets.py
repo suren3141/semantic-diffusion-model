@@ -9,7 +9,7 @@ import numpy as np
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 
-
+from tqdm import tqdm
 import importlib
 
 def load_data(
@@ -321,6 +321,7 @@ class NucleiDataset(Dataset):
             self.augment = True
             assert self.in_channels == 1, "set in_channels to 1"
 
+<<<<<<< HEAD
         if shuffle_masks:
             if match_struct:
                 from .data_util import get_prop_diff, get_shape_properties_df
@@ -342,6 +343,33 @@ class NucleiDataset(Dataset):
             self.local_images = [self.local_images[i] for i in ind]
 
 
+=======
+        if match_struct:
+            assert shuffle_masks is False
+            from .data_util import get_prop_diff, get_shape_properties_df
+
+            arr_inst = [np.array(self.load_mask(y)) for y in self.local_instances]
+            mask_props = get_shape_properties_df(arr_inst)
+
+            ind = []
+            
+            for idx, prop in tqdm(mask_props.iterrows(), total=mask_props.shape[0], desc="Shape matching APP and STRUCT"):
+                diff = get_prop_diff(mask_props, prop)
+                indices = (-diff['prob']).argsort()[:20].to_list()
+                indices.remove(idx)
+                ind.append(np.random.choice(indices))
+
+            self.local_images = [self.local_images[i] for i in ind]
+
+        elif shuffle_masks:
+
+            np.random.seed(42)
+            ind = np.random.choice(len(self.local_images), len(self.local_images), replace=False)
+            self.local_images = [self.local_images[i] for i in ind]
+
+        # TODO : This results in duplicate appearance (but unique struct). Is this an issue?
+        # assert len(np.unique(self.local_images)) == len(self.local_images)
+>>>>>>> 27ff3f6130951ae9e5af6977d68f86dfbfd5cbaf
 
 
     def __len__(self):

@@ -1,3 +1,9 @@
+# Build : docker build -t semantic-diffusion-model -f environment/Dockerfile .
+
+# Run :   docker run --gpus all --ipc host --rm -it \
+#         -v <PATH_TO_DATASET>:/mnt/dataset \
+#         --name semantic-diffusion-model semantic-diffusion-model bash
+
 ARG PYTORCH="1.12.0"
 ARG CUDA="11.3"
 ARG CUDNN="8"

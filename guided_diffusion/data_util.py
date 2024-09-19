@@ -21,13 +21,13 @@ def binary_to_instance(mask_path):
     # Label connected components
     labeled_mask = measure.label(binary_mask)
 
-def calculate_shape_properties(inst_mask):
+def calculate_shape_properties(inst_mask, verbose=False):
     
     # Get properties of labeled regions
     properties = regionprops(inst_mask)
     
     if not properties:
-        print("No shapes found in the mask.")
+        if verbose: print("No shapes found in the mask.")
         mean_properties = {
             'area_weighted_solidity': 1,
             'total_area': 0,
@@ -61,7 +61,7 @@ def calculate_shape_properties(inst_mask):
 
 # from csbdeep.utils import Path, normalize
 # from stardist import fill_label_holes
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 
 
 
@@ -70,7 +70,7 @@ def get_shape_properties_df(masks):
     y_prop = [calculate_shape_properties(y) for y in tqdm(masks)]
 
     keys = y_prop[0].keys()
-    print(keys)
+    # print(keys)
 
     df_prop = {k:[x[k] for x in y_prop] for k in keys}
     df_prop = {k:np.array(v) for k, v in df_prop.items()}
