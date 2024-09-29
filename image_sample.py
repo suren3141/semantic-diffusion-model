@@ -90,6 +90,7 @@ def main():
         in_channels=args.in_channels,
         shuffle_masks=args.shuffle_masks,
         match_struct=args.match_struct,
+        match_app=args.match_app,
         augment=args.augment,
     )
 
@@ -234,6 +235,7 @@ def create_argparser():
         use_train=False,
         shuffle_masks=False,
         match_struct=False,
+        match_app=False,
         augment=False,
     )
     defaults.update(model_and_diffusion_defaults())

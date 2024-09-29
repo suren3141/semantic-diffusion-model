@@ -32,6 +32,7 @@ def load_data(
     no_instance=False,
     shuffle_masks=False,
     match_struct=False,
+    match_app=False,
     augment=False,
 ):
     """
@@ -104,7 +105,6 @@ def load_data(
 
     if dataset_mode in nuclei_datasets:
 
-
         dataset = NucleiDataset(
             dataset_mode,
             image_size,
@@ -125,6 +125,7 @@ def load_data(
             no_instance=no_instance,
             shuffle_masks=shuffle_masks,
             match_struct=match_struct,
+            match_app=match_app,
             augment=augment,
         )
 
@@ -283,6 +284,7 @@ class NucleiDataset(Dataset):
         no_instance=True,
         shuffle_masks=False,
         match_struct=False,
+        match_app=False,
         augment=False,
     ):
         super().__init__()
@@ -321,29 +323,6 @@ class NucleiDataset(Dataset):
             self.augment = True
             assert self.in_channels == 1, "set in_channels to 1"
 
-<<<<<<< HEAD
-        if shuffle_masks:
-            if match_struct:
-                from .data_util import get_prop_diff, get_shape_properties_df
-
-                arr_inst = [np.array(self.load_mask(y)) for y in self.local_instances]
-                mask_props = get_shape_properties_df(arr_inst)
-
-                ind = []
-                
-                for idx, prop in mask_props.iterrows():
-                    diff = get_prop_diff(mask_props, prop)
-                    indices = (-diff['prob']).argsort()[:20].to_list()
-                    indices.remove(idx)
-                    ind.append(np.random.choice(indices))
-
-            else:
-                np.random.seed(42)
-                ind = np.random.choice(len(self.local_images), len(self.local_images), replace=False)
-            self.local_images = [self.local_images[i] for i in ind]
-
-
-=======
         if match_struct:
             assert shuffle_masks is False
             from .data_util import get_prop_diff, get_shape_properties_df
@@ -361,6 +340,10 @@ class NucleiDataset(Dataset):
 
             self.local_images = [self.local_images[i] for i in ind]
 
+        elif match_app:
+            # TODO : Implement this again to load from memory. Feature extraction is too slow
+            raise NotImplementedError
+
         elif shuffle_masks:
 
             np.random.seed(42)
@@ -369,7 +352,6 @@ class NucleiDataset(Dataset):
 
         # TODO : This results in duplicate appearance (but unique struct). Is this an issue?
         # assert len(np.unique(self.local_images)) == len(self.local_images)
->>>>>>> 27ff3f6130951ae9e5af6977d68f86dfbfd5cbaf
 
 
     def __len__(self):
