@@ -1,18 +1,22 @@
+#These are the parameters used for training, but can be changed
 num_channels=128
 num_head_channels=32
 steps=1000
 lr=1e-4
 batch_size=8
 image_size=128
-# training_data=names_37_14/TCGA-18-5592-01Z-00-DX1
-training_data=/mnt/dataset/MoNuSeg/patches_valid_inst_${image_size}x${image_size}_128x128/__ResNet50_umap_n_components_3_random_state_42_hdbscan_min_samples_10_min_cluster_size_50_v1.2/7/
-# training_data=/mnt/dataset/MoNuSeg/patches_valid_inst_${image_size}x${image_size}_128x128/
-# training_data=/mnt/dataset/MoNuSeg/patches_256x256_128x128/ResNet18_kmeans_10_v1.1/4/
-model_name=patches_valid_${num_channels}.${num_head_channels}CH_${steps}st_${lr}lr_${batch_size}bs_hvb_col_cos
-# model_name=monuseg_patches_${num_channels}.${num_head_channels}CH_${steps}st_${lr}lr_8bs_hv_ResNet18_kmeans_10_v1.1_4
+# Edit path to dataset path (with MoNuSegTrainingData and MoNuSegTestData folders)
+training_data=/mnt/dataset/MoNuSeg/patches_valid_inst_${image_size}x${image_size}_128x128/__ResNet50_umap_n_components_3_random_state_42_hdbscan_min_samples_10_min_cluster_size_50_v1.2/6/10ss
+# Model name created based on parameters and dataset, but change as needed.
+model_name=patches_valid_${num_channels}.${num_head_channels}CH_${steps}st_${lr}lr_${batch_size}bs_hvb_col_cos_clus6_10ss
 model_path=/mnt/dataset/semantic-diffusion-model/monuseg_${image_size}x${image_size}/${model_name}
-# out_dir=/mnt/dataset/MoNuSeg/out_sdm/${model_name}/ResNet18_kmeans_10_v1.1/4/output_s${s_val}_${iter}
-echo $out_dir
+# New parameters were introduced, and can be adjusted as needed
+# --num_classes 6 : Number of channels in condition map
+# --class_cond False : Set to false since MoNuSeg has only single class
+# --use_hv_map True : 2 channel Horizontal and Vertical map
+# --use_col_map True : 3 channel color map
+# --no_instance False : single channel instance boundary map (if True : Uses binary mask, if False uses instance boundary)
+echo $model_path
 OPENAI_LOGDIR="$model_path" \
 OPENAI_LOG_FORMAT="stdout,log,csv,tensorboard" \
 python image_train.py \

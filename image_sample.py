@@ -139,14 +139,6 @@ def main():
 
         if 'instance' in cond:
             inst_map = cond['instance'].cpu().numpy().astype(np.uint16)
-<<<<<<< HEAD
-            for j in range(inst_map.shape[0]):
-                inst_name = Path(cond['path'][j]).stem + '.tif'
-                Image.fromarray(inst_map[j].squeeze()).save(os.path.join(inst_path, inst_name))        
-
-        for j in range(sample.shape[0]):
-            img_name = Path(cond['path'][j]).stem + '.png'
-=======
         else:
             inst_map = None
 
@@ -155,7 +147,6 @@ def main():
             save_name = get_savename(file_path=image_path, file_name=Path(cond['path'][j]).stem, ext="png")
             img_name = Path(save_name).stem + '.png'
             # Save png images
->>>>>>> 27ff3f6130951ae9e5af6977d68f86dfbfd5cbaf
             tv.utils.save_image(image[j], os.path.join(image_path, img_name))
             tv.utils.save_image(sample[j], os.path.join(sample_path, img_name))
             tv.utils.save_image(label[j], os.path.join(label_path, img_name))
