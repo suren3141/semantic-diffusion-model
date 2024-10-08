@@ -41,7 +41,7 @@ Extensive experiments on three benchmark datasets demonstrate the effectiveness 
 ## Example Results
 
 <p align='center'>  
-  <img src='images/inference_shape_feat.png'/>
+  <img src='images/inference_shape_feat.png' height="500">
 </p>
 
 <!-- * **Cityscapes:**
