@@ -1,6 +1,6 @@
 # In-silico image generation through SDM for Nuclei Segmentation
 
-This work extends on [SDM](https://github.com/WeilunWang/semantic-diffusion-model) for histopathological synthetic image generation. 
+This work extends on [Semantic Image Synthesis via Diffusion Models](https://github.com/WeilunWang/semantic-diffusion-model) for histopathological synthetic image generation. 
 
 ![model](./images/model.png)
 
